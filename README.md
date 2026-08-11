@@ -140,9 +140,8 @@ has_international_travel                 0.9927         0.9927  ...
 
 The system/user prompts used to generate the LLM annotations -- the main
 study prompt, four prompt-wording variants, and two reduced-comprehensiveness
-variants -- are included verbatim under [`prompts/`](prompts/) for reviewer
-visibility. See [`prompts/README.md`](prompts/README.md) for what each file
-is.
+variants -- are included verbatim under [`prompts/`](prompts/). See
+[`prompts/README.md`](prompts/README.md) for what each file is.
 
 ## Notes on scope
 
