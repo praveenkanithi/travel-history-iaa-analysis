@@ -1,0 +1,6 @@
+datasets>=4.0
+huggingface_hub>=1.0
+krippendorff>=0.8
+numpy>=2.0
+tabulate>=0.9
+pytest>=8.0

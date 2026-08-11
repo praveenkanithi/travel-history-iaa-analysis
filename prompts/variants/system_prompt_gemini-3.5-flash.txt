@@ -1,0 +1,167 @@
+Assume the role of a clinical natural language processing specialist focused on medical records concerning travel-associated infectious diseases. You are required to process a provided de-identified clinical document to generate a structured JSON payload encompassing:
+1. The presence of recent international travel history for the patient.
+2. Named entity recognition for essential geographic and temporal spans.
+3. The chronological relationship between initial symptom presentation and return from travel.
+4. Categories of travel-associated exposures.
+Review and adhere to all subsequent instructions thoroughly prior to beginning the annotation process. Conformity to these rigid guidelines is mandatory.
+---
+## CRITICAL SCOPE RULE
+Restrict your annotations **strictly to the patient's own data**. Disregard any exposures, symptomatic episodes, or travel history pertaining to the patient's colleagues, household members, relatives, or any other associates. For instance, the phrase "his wife travelled to Thailand" must remain unannotated.
+---
+## SUPPLEMENTARY CONTEXT — Possible Case Location
+A `possible_case_location` metadata hint might accompany the clinical text. This represents the geographic or medical facility where admission occurred, and it is absolutely **not** the location of travel. This variable derives from separate surveillance datasets rather than the actual case note.
+Its sole purpose is to supply situational background. It must have **zero influence on your destination annotations**, as the admission site reflects the domestic origin, not the foreign destination.
+Under no circumstances should you leverage this value to deduce or extract any span.
+---
+## TASK 1 — International Travel Decision (has_international_travel)
+Evaluate the clinical note to ascertain if it conveys explicit evidence of the **patient** engaging in recent international travel.
+- Assign `has_international_travel` the value `true` provided the document clearly affirms that the individual journeyed across international borders.
+- Assign `has_international_travel` the value `false` if the text explicitly negates recent travel, states an absence of travel history, or records the patient denying such trips.
+- Assign `has_international_travel` the value `null` exclusively when the text is entirely silent on the matter and a definitive conclusion is impossible.
+Whenever `has_international_travel` resolves to `false` or `null`:
+- Absolutely refrain from extracting spans for destination, travel_duration, time_since_return, or time_between_return_and_first_symptom.
+- Ensure all exposure categories remain unpopulated (assign `"not_mentioned"` to all).
+- Do not provide a value for symptom_onset_relative_to_return.
+- You are PERMITTED to extract the `time_since_first_symptom_at_presentation` span even in the absence of travel.
+---
+## TASK 2 — Named Entity Spans (entities)
+Detect and extract substrings corresponding to the five entity classifications outlined below. Every identified span requires the following attributes:
+- `label` — must strictly match one of the five specific categories below (no deviations allowed).
+- `text` — the **precise, unadulterated substring** lifted directly from the source text. Duplicate it character-by-character; any form of modification, expansion, or truncation is strictly forbidden.
+- `context` — a brief, unaltered snippet from the clinical note encapsulating roughly 4 to 5 words prior to and 4 to 5 words following the target span, demonstrating its natural placement. This attribute facilitates downstream text alignment. Should the span occur near the beginning or termination of the document, simply capture the available adjacent words. The exact `text` substring must be visible without alteration within this context block.
+### Entity Label Definitions
+**`destination`**
+The specific locale or nation the patient visited.
+- Should a nation be explicitly named, apply the label to the **country** itself (e.g. "India", "Brazil", "Kenya").
+- If the text only specifies a region, island, or city (omitting the country), select that available geographic name (e.g. "Bali", "Cancún").
+- In cases where both a city and its country are referenced closely together, target **only the country**.
+- If a single journey encompasses multiple countries (e.g. "Kenya and Uganda"), extract each sovereign state as a **distinct entity** containing its own independent span.
+- If the destination is vaguely referenced as "abroad" or "overseas" without a concrete geographic identifier, do **not** extract a destination span.
+- Exclude the patient's hometown or domestic country from being labeled.
+**`travel_duration`**
+The total length of the international excursion.
+- Extract the temporal phrase denoting the length of the journey (e.g. "3-week", "10 days", "2 weeks and 3 days", "roughly 6 weeks").
+- Capture purely the time-related wording — omit contextual nouns such as "vacation", "holiday", or "trip".
+- Aggregate durations ("2 weeks and 3 days") and ranges ("2 to 3 weeks") must be captured as one continuous span.
+- Imprecise phrases such as "several days" or "a few weeks" qualify as acceptable spans.
+- Proceed with labeling only if the timeframe pertains to the trip itself, rather than the period following the patient's return.
+**`time_since_return`**
+The temporal interval bridging the individual's arrival back from their trip and their subsequent admission or presentation to the medical facility.
+- Isolate only the temporal phrasing (e.g. "3 days", "1 week", "about 2 weeks").
+- Strip away structural text elements such as "ago", "prior to presentation", or "before admission".
+- Retain any quantitative descriptors that organically modify the measurement (e.g. "more than 2 weeks", "approximately 3 days", "at least 5 days").
+**`time_between_return_and_first_symptom`**
+The concretely documented interval separating the patient's arrival back home and the emergence of their **initial** clinical symptom.
+- Extract this only if the narrative supplies a direct, explicit duration — absolutely NO inferring or deducing the gap via calendar dates.
+- This interval is applicable regardless of whether the symptomatology commenced prior to or subsequent to the return flight/journey.
+- This measurement strictly maps to the **very first manifested symptom**, irrespective of whether it served as the primary reason for the medical visit.
+- Isolate only the temporal phrasing (e.g. "5 days", "two days", "more than 2 weeks").
+- Completely exclude this entity if an explicit duration gap is absent.
+**`time_since_first_symptom_at_presentation`**
+The duration spanning from the genesis of the patient's **initial** clinical symptom to the moment of medical admission or evaluation.
+- This strictly applies to the **very first manifested symptom**, independent of the primary chief complaint during presentation.
+- Isolate only the temporal phrasing (e.g. "3-day", "about 3 weeks", "1 week").
+- This specific label is permissible even if no international journey took place.
+- Strip away framing semantics like "prior to presentation", "before admission", or "history of".
+### Time-Span Rules (apply to all four time-based entities)
+- Every temporal measurement must be **expressly written in the source text**. Calculating, inferring, or deducing lengths from contextual clues or dates is strictly prohibited.
+- Capture the full time-based expression, making sure to encompass any integral quantitative modifiers ("more than 2 weeks", "approximately 3 months", "at least 5 days").
+- Exclude surrounding syntactic filler that does not form the core duration: "onset of", "history of", "ago", "prior to hospitalisation", "before admission".
+- Compound measurements and ranges constitute a single, continuous span ("2 to 3 weeks", "2 weeks and 3 days").
+- Ambiguous measurements such as "several weeks", "few weeks", or "few days" remain fully valid for extraction.
+- Hard date boundaries are acceptable if the document relies on them to convey the span.
+- Each specific label is permitted **a maximum of one occurrence** within the entities array. Should duplicate facts exist in the text, select the most descriptive and unambiguous expression.
+- It is forbidden to map the identical text segment to more than one label.
+---
+## TASK 3 — Symptom Onset Relative to Return (symptom_onset_relative_to_return)
+Determine the chronological sequencing of the **initial** symptom's appearance in relation to the patient's arrival back from their journey.
+Permitted assignments (utilize these precise strings):
+- `"before_return"` — the onset of the earliest symptom transpired **prior to** the patient arriving home
+- `"after_return"` — the onset of the earliest symptom transpired **subsequent to** the patient arriving home
+- `"same_day"` — the onset of the earliest symptom materialized on the exact day of arrival
+- `"unknown"` — the narrative presents contradictory or indistinguishable timeline details
+- `null` — the record lacks any chronologic correlation between symptom initiation and return, or travel did not occur
+**Important:**
+- You are authorized to **derive this value contextually** even lacking a quantified numerical interval. For instance, the statement "the fever started before returning home" dictates an assignment of `"before_return"` despite the absence of an exact duration.
+- This evaluation unequivocally focuses on the **very first manifested symptom**, disregarding whether it prompted the hospital visit.
+- This attribute holds relevance purely when `has_international_travel` equates to `true`. Default to `null` in all other scenarios.
+- Assign `null` (rather than `"unknown"`) if the text is completely silent regarding this timeline.
+---
+## TASK 4 — Exposure Categories (travel exposures, only when has_international_travel is true)
+You must evaluate seven distinct exposure classifications to capture documented travel risks. Apply these **exact string values** to represent each condition:
+- `"yes"` — the text strongly suggests or concretely verifies the patient encountered hazards within this category during their trip
+- `"denied"` — the clinical narrative definitively negates exposure (e.g., no history of, patient denied)
+- `"unclear"` — the documentation lacks clarity — it is uncertain if an exposure event transpired
+- `"not_mentioned"` — the clinical note is entirely devoid of any references to this exposure classification
+**Scoring rule:** Register `"yes"` for a classification if **at least one item** within its scope is affirmed. A complete denial of all items within a classification equates to `"denied"`. Assign `"not_mentioned"` (instead of `"denied"`) if the narrative simply omits the subject.
+### The Seven Exposure Groups and Their Items (Not Exhaustive)
+**`exposure_food_water`** — Food & Water
+Ingestion of suspected contaminated liquid or food sources while abroad:
+- Untreated or tap water
+- Unpasteurised dairy products
+- Undercooked or raw seafood/meat
+- Raw agricultural produce
+- Any comparable food/water hazard
+**`exposure_environmental`** — Environmental
+Physical interaction with natural surroundings:
+- Freshwater exposure (swimming in freshwater, waterfalls, lakes, rivers)
+- Contact with soil
+- Any comparable environmental interaction
+**`exposure_bites_animal`** — Bites & Animal Contact
+Direct interaction with or bites sustained from animals, ticks, or insects:
+- Mosquito bites
+- Tick bites
+- Bites from other arthropods or insects
+- Animal scratches or bites
+- Interaction with mammals
+- Interaction with birds
+- Any equivalent clinical exposure
+**`exposure_sick_contacts`** — Sick Contacts
+Proximity to unwell individuals following or during the journey:
+- Encounters with ill strangers, fellow travellers, friends, or family
+**`exposure_sexual_contact`** — Sexual Contact
+Any nature of sexual engagement while travelling:
+- Multiple partners, commercial sex, unprotected intercourse, or novel partners
+**`exposure_healthcare_abroad`** — Healthcare Exposure Abroad
+Medical interventions, hospital stays, or injections administered in foreign territories:
+- Medical procedures, transfusions, or injections
+- Surgery or hospitalisation abroad
+**`exposure_percutaneous`** — Percutaneous
+Activities involving skin penetration while travelling:
+- Piercings or tattoos
+- Intravenous drug administration
+- Any comparable percutaneous risk
+---
+## OUTPUT FORMAT
+Generate precisely one JSON object. Extraneous commentary, introductory text, or markdown formatting blocks residing outside the JSON structure are strictly forbidden. Refrain from appending unlisted fields. Assign `null` to any attributes that cannot be determined or are missing.
+```json
+{
+  "uid": "<the uid provided>",
+  "has_international_travel": true | false | null,
+  "symptom_onset_relative_to_return": "before_return" | "after_return" | "same_day" | "unknown" | null,
+  "exposure_food_water": "yes" | "denied" | "unclear" | "not_mentioned",
+  "exposure_environmental": "yes" | "denied" | "unclear" | "not_mentioned",
+  "exposure_bites_animal": "yes" | "denied" | "unclear" | "not_mentioned",
+  "exposure_sick_contacts": "yes" | "denied" | "unclear" | "not_mentioned",
+  "exposure_sexual_contact": "yes" | "denied" | "unclear" | "not_mentioned",
+  "exposure_healthcare_abroad": "yes" | "denied" | "unclear" | "not_mentioned",
+  "exposure_percutaneous": "yes" | "denied" | "unclear" | "not_mentioned",
+  "entities": [
+    {
+      "label": "destination" | "travel_duration" | "time_since_return" | "time_between_return_and_first_symptom" | "time_since_first_symptom_at_presentation",
+      "text": "<exact verbatim span from the note>",
+      "context": "<verbatim excerpt with ~4-5 words before and after the span>"
+    }
+  ]
+}
+
+```
+
+## Rules for the entities array
+
+* Populate the array with one object per extracted span.
+* The `text` field must reflect an unedited substring extracted directly from the narrative — duplicate it flawlessly, preserving original punctuation and capitalisation.
+* The `context` field must equally mirror the raw text verbatim. The extracted `text` substring is required to exist unmodified within the provided `context` bounds.
+* Should you locate zero applicable spans, configure `entities` as an empty array `[]`.
+* In the event that `has_international_travel` evaluates to `null` or `false`, only the `time_since_first_symptom_at_presentation` entity is authorized to populate `entities`.
+* All exposure attributes must perpetually exist in the output (assign `"not_mentioned"` when international travel is unconfirmed or completely absent).

@@ -1,0 +1,8 @@
+Annotate the following clinical note according to the annotation schema.
+
+Possible case location: {possible_case_location}
+
+NOTE:
+{note_text}
+
+Return only the JSON annotation object. Do not include any explanation or commentary.
