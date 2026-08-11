@@ -42,9 +42,9 @@ flowchart TD
 Source: [`pkanithi/travel-history-iaa-benchmark`](https://huggingface.co/datasets/pkanithi/travel-history-iaa-benchmark)
 (Hugging Face Hub, private). One row per case report, with:
 
-- `case_report` -- the full note text
-- `clinician_1` ... `clinician_5` -- one structured annotation per clinician (JSON-encoded), or `null` if that clinician did not see the case
-- `llm_*` -- one structured annotation per LLM (JSON-encoded), same schema
+- `case_report`: the full note text
+- `clinician_1` ... `clinician_5`: one structured annotation per clinician (JSON-encoded), or `null` if that clinician did not see the case
+- `llm_*`: one structured annotation per LLM (JSON-encoded), same schema
 
 Each structured annotation has `has_international_travel` (bool),
 `symptom_onset_relative_to_return` (categorical), seven `exposure_*`
@@ -138,14 +138,28 @@ has_international_travel                 0.9927         0.9927  ...
 
 ## Prompts
 
-The system/user prompts used to generate the LLM annotations -- the main
-study prompt, four prompt-wording variants, and two reduced-comprehensiveness
-variants -- are included verbatim under [`prompts/`](prompts/). See
-[`prompts/README.md`](prompts/README.md) for what each file is.
+The system/user prompts used to generate the LLM annotations, including the
+main study prompt, four prompt-wording variants, and two
+reduced-comprehensiveness variants, are included verbatim under
+[`prompts/`](prompts/). See [`prompts/README.md`](prompts/README.md) for what
+each file is.
+
+The underlying case reports are sourced from
+[`zhengyun21/PMC-Patients`](https://huggingface.co/datasets/zhengyun21/PMC-Patients)
+on Hugging Face, filtered to notes matching at least one of the following
+travel-positive keywords: `travel`, `traveled`, `travelled`, `traveling`,
+`travelling`, `travel history`, `recent travel`, `abroad`, `overseas`,
+`returned from`, `arrived from`, `visit`, `visited`, `stay in`, `stayed in`,
+`flight`, `flew`, `passport`, `visa`, `contact with traveler`, `contact with a
+traveler`, `contact with someone who traveled`, `contact with person who
+traveled`, `exposure to traveler`, `exposure history`, `family member
+traveled`, `household contact travel history`, `imported case`,
+`travel-related exposure`, `backpacking`, `backpacker`, `backpackers`,
+`camping`, `camper`, `camps`.
 
 ## Notes on scope
 
 - No LLM ensemble/consortium annotator is built; each of the 9 models is
   scored individually against the clinician-majority reference.
-- This repository does not produce plots -- all output is tabular (terminal
+- This repository does not produce plots; all output is tabular (terminal
   + JSON).
